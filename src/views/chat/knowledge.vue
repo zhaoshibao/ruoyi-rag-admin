@@ -93,13 +93,45 @@
       @pagination="getList"
     />
 
+    <!-- 查看知识库内容对话框 -->
     <el-dialog
-      title="文件内容内下"
+      title="知识库内容详情"
       :visible.sync="dialogOpen"
-      width="550px">
-      <span>{{ fileContent }}</span>
+      width="80%"
+      top="5vh">
+      <el-table 
+        v-loading="contentLoading" 
+        :data="knowledgeContent" 
+        border
+        style="width: 100%"
+        max-height="500">
+        <el-table-column label="序号" type="index" width="60" align="center" />
+        <el-table-column label="文件名" prop="fileName" width="120" align="center" />
+        <el-table-column label="内容片段" prop="content" show-overflow-tooltip>
+          <template slot-scope="scope">
+            <div style="white-space: pre-wrap; word-break: break-all;">{{ scope.row.content }}</div>
+          </template>
+        </el-table-column>
+        
+        <el-table-column label="创建时间" prop="createTime" width="180" align="center">
+          <template slot-scope="scope">
+            <span>{{ parseTime(scope.row.createTime) }}</span>
+          </template>
+        </el-table-column>
+      </el-table>
+      
+      <!-- 分页组件 -->
+      <pagination
+        v-show="contentTotal > 0"
+        :total="contentTotal"
+        :page.sync="contentQueryParams.pageNum"
+        :limit.sync="contentQueryParams.pageSize"
+        @pagination="getKnowledgeContent"
+        style="margin-top: 20px;"
+      />
+      
       <span slot="footer" class="dialog-footer">
-        <el-button type="primary" @click="dialogOpen = false">OK</el-button>
+        <el-button type="primary" @click="dialogOpen = false">关闭</el-button>
       </span>
     </el-dialog>
 
@@ -155,6 +187,16 @@ export default {
       },
       dialogOpen: false,
       fileContent: "",
+      // 知识库内容相关
+      knowledgeContent: [],
+      contentLoading: false,
+      contentTotal: 0,
+      currentKnowledgeId: null,
+      currentProjectId: null,
+      contentQueryParams: {
+        pageNum: 1,
+        pageSize: 10
+      },
       // 遮罩层
       loading: true,
       // 选中数组
@@ -240,12 +282,49 @@ export default {
       this.queryParams.pageNum = 1;
       this.getList();
     },
+    /** 查看内容按钮操作 */
     handleView(row){
-      const knowledgeId = row.knowledgeId;
-      console.log(knowledgeId)
-      getKnowledge(knowledgeId).then(response => {
-        this.fileContent = response.data.content
-        this.dialogOpen = true;
+      this.currentKnowledgeId = row.knowledgeId;
+      this.currentProjectId = row.projectId;
+      this.contentQueryParams.pageNum = 1;
+      this.dialogOpen = true;
+      this.getKnowledgeContent();
+    },
+    /** 获取知识库内容分页数据 */
+    getKnowledgeContent() {
+      this.contentLoading = true;
+      getKnowledge(this.currentProjectId, this.currentKnowledgeId).then(response => {
+        console.log('知识库内容数据:', response.data);
+        
+        // 假设接口返回的数据结构，根据实际情况调整
+        if (response.data && Array.isArray(response.data)) {
+          // 如果返回的是数组，进行分页处理
+          const startIndex = (this.contentQueryParams.pageNum - 1) * this.contentQueryParams.pageSize;
+          const endIndex = startIndex + this.contentQueryParams.pageSize;
+          this.knowledgeContent = response.data.slice(startIndex, endIndex);
+          this.contentTotal = response.data.length;
+        } else if (response.data && response.data.content) {
+          // 如果返回的是单个内容对象，将其转换为数组格式
+          const contentArray = [{
+            content: response.data.content,
+            fileName: response.data.fileName || 'N/A',
+            createTime: response.data.createTime || new Date().toISOString()
+          }];
+          this.knowledgeContent = contentArray;
+          this.contentTotal = 1;
+        } else {
+          // 如果数据格式不符合预期，显示空数据
+          this.knowledgeContent = [];
+          this.contentTotal = 0;
+        }
+        
+        this.contentLoading = false;
+      }).catch(error => {
+        console.error('获取知识库内容失败:', error);
+        this.knowledgeContent = [];
+        this.contentTotal = 0;
+        this.contentLoading = false;
+        this.$modal.msgError('获取知识库内容失败');
       });
     },
     /** 重置按钮操作 */

@@ -45,8 +45,8 @@ export function addProject(data) {
 // 修改项目
 export function updateProject(data) {
   return request({
-    url: '/chat/project/',
-    method: 'put',
+    url: '/chat/project/edit',
+    method: 'post',
     data: data
   })
 }

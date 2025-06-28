@@ -18,9 +18,9 @@ export function listKnowledge(query) {
 }
 
 // 查询知识库详细
-export function getKnowledge(knowledgeId) {
+export function getKnowledge(projectId, knowledgeId) {
   return request({
-    url: '/chat/knowledge/' + knowledgeId,
+    url: '/chat/knowledge/' + projectId + "/" + knowledgeId,
     method: 'get'
   })
 }

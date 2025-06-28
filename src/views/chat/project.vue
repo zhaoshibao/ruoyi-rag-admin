@@ -17,10 +17,10 @@
           style="width: 240px"
         >
           <el-option
-            v-for="mod in models"
-            :key="mod"
-            :label="mod"
-            :value="mod"
+            v-for="mod in modelTypeOptions"
+            :key="mod.value"
+            :label="mod.label"
+            :value="mod.value"
           />
         </el-select>
       </el-form-item>
@@ -66,18 +66,46 @@
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="projectList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="projectList" @selection-change="handleSelectionChange" >
       <el-table-column type="selection" width="55" align="center" />
-      <el-table-column label="项目编号" align="center" prop="projectId" />
-      <el-table-column label="项目名称" align="center" prop="projectName" />
-      <el-table-column label="模型类型" align="center" prop="type" />
-      <el-table-column label="具体模型" align="center" prop="model" />
-      <el-table-column label="创建时间" align="center" prop="createTime" width="180">
+      <el-table-column label="项目编号" align="center" prop="projectId" width="80" />
+      <el-table-column label="项目名称" align="center" prop="projectName" width="120" />
+      <el-table-column label="模型类型" align="center" prop="type" width="100" />
+      <el-table-column label="具体模型" align="center" prop="model" width="150" />
+      <el-table-column label="嵌入模型" align="center" prop="embeddingModel" width="150" />
+      <el-table-column label="基础url" align="center" prop="baseUrl" width="150">
+        <template slot-scope="scope">
+          <el-tooltip class="item" effect="dark" :content="scope.row.baseUrl" placement="top">
+            <div class="ellipsis-text">{{ scope.row.baseUrl }}</div>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="apiKey" align="center" prop="apiKey" width="120">
+        <template slot-scope="scope">
+          <el-tooltip class="item" effect="dark" :content="scope.row.apiKey" placement="top">
+            <div class="ellipsis-text">{{ scope.row.apiKey }}</div>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column label="系统提示词" align="center" prop="systemPrompt" width="300">
+        <template slot-scope="scope">
+          <el-tooltip class="item" effect="dark" :content="scope.row.systemPrompt" placement="top-start">
+            <div class="ellipsis-text">{{ scope.row.systemPrompt }}</div>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+       <el-table-column label="PDF增强解析" align="center" prop="pdfAnalysis" width="100">
+        <template slot-scope="scope">
+            <span v-if="scope.row.pdfAnalysis == 1">是</span>
+            <span v-else>否</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="创建时间" align="center" prop="createTime" width="150">
         <template slot-scope="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding" width="280">
+      <el-table-column label="操作" align="center" class-name="small-padding" width="200">
         <template slot-scope="scope">
           <el-button
             size="mini"
@@ -113,20 +141,45 @@
     />
 
     <!-- 添加或修改项目对话框 -->
-    <el-dialog :title="projectTitle" :visible.sync="projectOpen" width="500px" append-to-body>
-      <el-form ref="form" :model="form" :rules="rules" label-width="80px">
+    <el-dialog :title="projectTitle" :visible.sync="projectOpen" width="800px" append-to-body>
+      <el-form ref="form" :model="form" :rules="rules" label-width="180px">
         <el-form-item label="项目名称" prop="projectName">
           <el-input v-model="form.projectName" placeholder="请输入项目名称" />
         </el-form-item>
-        <el-form-item label="选择模型" prop="selectedModel">
-          <el-radio-group v-model="form.selectedModel">
-            <el-radio
-              v-for="mdl in models"
-              :key="mdl"
-              :label="mdl"
-              :value="mdl"
-            >{{mdl}}</el-radio>
-          </el-radio-group>
+         <el-form-item label="模型类型" prop="type">
+          <el-select
+          v-model="form.type"
+          placeholder="选择模型类型"
+          clearable
+          style="width: 240px"
+          
+        >
+          <el-option
+            v-for="item in modelTypeOptions"
+            :key="item.value"
+            :label="item.label"
+            :value="item.value"
+          />
+        </el-select>
+        </el-form-item>
+        <el-form-item label="具体模型" prop="model">
+           <el-input v-model="form.model" placeholder="请输入具体模型" />
+        </el-form-item>
+          <el-form-item label="嵌入模型" prop="embeddingModel">
+           <el-input v-model="form.embeddingModel" placeholder="请输入嵌入模型" />
+        </el-form-item>
+         <el-form-item label="基础url" prop="baseUrl">
+           <el-input v-model="form.baseUrl" placeholder="请输入基础url" />
+        </el-form-item>
+         <el-form-item label="apiKey" prop="apiKey">
+           <el-input v-model="form.apiKey" placeholder="请输入apiKey" />
+        </el-form-item>
+         <el-form-item label="系统提示词" prop="systemPrompt">
+           <el-input type="textarea" 
+            :autosize="{ minRows: 10, maxRows: 10}" v-model="form.systemPrompt" placeholder="请输入系统提示词" />
+        </el-form-item>
+         <el-form-item label="是否开启pdf增强解析" prop="pdfAnalysis">
+           <el-switch v-model="form.pdfAnalysis" :active-value="1" :inactive-value="0" />
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -149,7 +202,7 @@
             multiple
             :file-list="fileList">
             <el-button size="small" type="primary">点击上传</el-button>
-            <div slot="tip" class="el-upload__tip">只能上传txt、word、pdf文件，如果需要查看文件详情，请移步知识库管理</div>
+            <div slot="tip" class="el-upload__tip">如果需要查看文件详情，请移步知识库管理</div>
           </el-upload>
         </el-form-item>
       </el-form>
@@ -206,6 +259,16 @@ export default {
         type: undefined,
         model: undefined
       },
+      modelTypeOptions: [
+       {
+        label: "openai",
+        value: "openai"
+       },
+       {
+        label: "ollama",
+        value: "ollama"
+       }
+      ],
       // 表单参数
       form: {},
       // 表单校验
@@ -213,9 +276,15 @@ export default {
         projectName: [
           { required: true, message: "项目名称不能为空", trigger: "blur" }
         ],
-        selectedModel: [
+        type: [
+          { required: true, message: "请选择模型类型", trigger: "blur" }
+        ],
+        model: [
           { required: true, message: "请选择模型", trigger: "blur" }
-        ]
+        ],
+        baseUrl: [
+          { required: true, message: "请输入基础url", trigger: "blur" }
+        ],
       }
     };
   },
@@ -232,29 +301,24 @@ export default {
         this.queryParams.type = undefined;
         this.queryParams.model = undefined;
       }
-    },
-    form: {
-      immediate: true,
-      deep: true,
-      handler(n, o) {
-        let slctModel = n.selectedModel
-        if (slctModel != undefined){
-          let mt = slctModel.split(" ");
-          this.form.type = mt[0];
-          this.form.model = mt[1];
-        } else {
-          this.form.type = undefined;
-          this.form.model = undefined;
-        }
-      }
     }
+    // 删除对form的错误监听
   },
   methods: {
     /** 查询项目列表 */
     getList() {
       this.loading = true;
       listProject(this.queryParams).then(response => {
+        console.log('接口返回的项目列表数据:', response.rows);
         this.projectList = response.rows;
+        // 确保列表数据中的isPdfAnalysis是数字类型
+        if (this.projectList && this.projectList.length > 0) {
+          this.projectList.forEach(item => {
+            if (item.pdfAnalysis !== undefined) {
+              item.pdfAnalysis = Number(item.pdfAnalysis);
+            }
+          });
+        }
         this.total = response.total;
         this.loading = false;
       });
@@ -268,9 +332,13 @@ export default {
     reset() {
       this.form = {
         projectId: undefined,
-        selectedModel: this.models[0],
         type: undefined,
-        model: undefined
+        model: undefined,
+        embeddingModel: undefined,
+        baseUrl: '',
+        apiKey: '',
+        systemPrompt: '',
+        pdfAnalysis: 1  // 设置默认值为1(开启)
       };
       this.resetForm("form");
     },
@@ -303,6 +371,10 @@ export default {
       const projectId = row.projectId || this.ids
       getProject(projectId).then(response => {
         this.form = response.data;
+        // 确保isPdfAnalysis是数字类型
+        if(this.form.pdfAnalysis !== undefined) {
+          this.form.pdfAnalysis = Number(this.form.pdfAnalysis);
+        }
         this.form.selectedModel = this.form.type + " " + this.form.model;
         this.projectOpen = true;
         this.projectTitle = "修改项目";
@@ -347,7 +419,13 @@ export default {
     submitForm: function() {
       this.$refs["form"].validate(valid => {
         if (valid) {
+          // 确保isPdfAnalysis是数字类型
+          if(this.form.pdfAnalysis !== undefined) {
+            this.form.pdfAnalysis = Number(this.form.pdfAnalysis);
+          }
+          
           if (this.form.projectId != undefined) {
+            console.log(this.form);
             updateProject(this.form).then(response => {
               this.$modal.msgSuccess("修改成功");
               this.projectOpen = false;
@@ -376,3 +454,34 @@ export default {
   }
 };
 </script>
+
+<style scoped>
+.ellipsis-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: inline-block;
+}
+
+/* 表格样式优化 */
+/deep/ .el-table {
+  font-size: 14px;
+}
+
+/deep/ .el-table th {
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: 500;
+}
+
+/deep/ .el-table--border th, /deep/ .el-table--border td {
+  border-right: 1px solid #ebeef5;
+}
+
+/deep/ .el-table--striped .el-table__body tr.el-table__row--striped td {
+  background-color: #fafafa;
+}
+</style>
+
+
