@@ -54,6 +54,10 @@
       </el-col>-->
       <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
+    <!-- 在表格上方添加 -->
+    <div class="mb8" style="text-align: right; font-size: 12px; color: #909399;">
+      <span v-if="lastRefreshTime">上次刷新: {{ lastRefreshTime }}</span>
+    </div>
 
     <el-table v-loading="loading" :data="knowledges" @selection-change="handleSelectionChange">
       <el-table-column label="知识文件编号" align="center" prop="knowledgeId" />
@@ -67,20 +71,30 @@
       </el-table-column>
       <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
-          <el-button
-            size="mini"
-            type="text"
-            icon="el-icon-view"
-            @click="handleView(scope.row)"
-            v-hasPermi="['chat:knowledge:queryVo']"
-          >查看内容</el-button>
-          <el-button
-            size="mini"
-            type="text"
-            icon="el-icon-delete"
-            @click="handleDelete(scope.row)"
-            v-hasPermi="['chat:knowledge:remove']"
-          >删除</el-button>
+          <div v-if="scope.row.isVector === 1">
+            <el-button
+              size="mini"
+              type="text"
+              icon="el-icon-view"
+              @click="handleView(scope.row)"
+              v-hasPermi="['chat:knowledge:queryVo']"
+            >查看内容</el-button>
+            <el-button
+              size="mini"
+              type="text"
+              icon="el-icon-delete"
+              @click="handleDelete(scope.row)"
+              v-hasPermi="['chat:knowledge:remove']"
+            >删除</el-button>
+          </div>
+          <div v-else>
+            <el-tooltip content="正在向量化" placement="top">
+              <span>
+                <i class="el-icon-loading"></i>
+                <span style="margin-left: 5px;">正在向量化</span>
+              </span>
+            </el-tooltip>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -179,6 +193,9 @@ export default {
   dicts: ['sys_normal_disable'],
   data() {
     return {
+      // 定时刷新定时器
+      timer: null,
+      lastRefreshTime: '',
       projectList: [],
       formProjectList: [],
       fileList: [{fileName: 'food.jpeg', url: ""}],
@@ -240,8 +257,28 @@ export default {
   created() {
     this.getProjectList();
     this.getList();
+    // 设置定时刷新，每5秒刷新一次
+    this.setupTimer();
+  },
+  beforeDestroy() {
+    // 组件销毁前清除定时器
+    this.clearTimer();
   },
   methods: {
+    setupTimer() {
+      this.clearTimer(); // 先清除可能存在的定时器
+      this.timer = setInterval(() => {
+        if (!this.loading) { // 只有在不加载时才刷新
+          this.getList();
+        }
+      }, 5000);
+    },
+    clearTimer() {
+      if (this.timer) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+    },
     getProjectList() {
       listProject().then(response => {
         this.formProjectList = response.rows;
@@ -252,12 +289,16 @@ export default {
         this.form.projectId = this.formProjectList.length == 0 ? undefined : this.formProjectList[0].projectId
       });
     },
-    /** 查询岗位列表 */
+    /** 查询知识库列表 */
     getList() {
       this.loading = true;
       listKnowledge(this.queryParams).then(response => {
         this.knowledges = response.rows;
         this.total = response.total;
+        this.loading = false;
+        this.lastRefreshTime = new Date().toLocaleTimeString();
+      }).catch(error => {
+        console.error('获取知识库列表失败:', error);
         this.loading = false;
       });
     },
@@ -371,3 +412,5 @@ export default {
   },
 };
 </script>
+
+
