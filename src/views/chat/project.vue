@@ -105,28 +105,35 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding" width="200">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
         <template slot-scope="scope">
+          <!-- 上传知识库 -->
           <el-button
             size="mini"
             type="text"
-            icon="el-icon-edit"
+            icon="el-icon-upload"
             @click="handleUpload(scope.row)"
-            v-hasPermi="['system:knowledge:add']"
+            v-hasPermi="['chat:project:upload']"
           >上传知识库</el-button>
           <el-button
             size="mini"
             type="text"
             icon="el-icon-edit"
             @click="handleUpdate(scope.row)"
-            v-hasPermi="['system:project:edit']"
+            v-hasPermi="['chat:project:edit']"
           >修改</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-share"
+            @click="handleKnowledgeGraph(scope.row)"
+          >查看知识图谱</el-button>
           <el-button
             size="mini"
             type="text"
             icon="el-icon-delete"
             @click="handleDelete(scope.row)"
-            v-hasPermi="['system:project:remove']"
+            v-hasPermi="['chat:project:remove']"
           >删除</el-button>
         </template>
       </el-table-column>
@@ -189,15 +196,19 @@
     </el-dialog>
 
     <el-dialog title="上传知识库" :visible.sync="acknowledgeOpen" width="550px" append-to-body>
-      <el-form ref="form" :model="form" :rules="rules" label-width="80px">
+      <el-form ref="uploadForm" :model="fileData" :rules="rules" label-width="120px">
+      
         <el-form-item label="文件上传" prop="fileUpload">
           <el-upload
+            ref="upload"
             class="upload-demo"
             :action="fileUploadUrl"
             :headers="fileUploadHeaders"
             :data="fileData"
             :on-success="handleSuccess"
             :before-remove="removeFile"
+            :before-upload="beforeUpload"
+            :on-remove="handleRemove"
             name="file"
             multiple
             :file-list="fileList">
@@ -205,10 +216,18 @@
             <div slot="tip" class="el-upload__tip">如果需要查看文件详情，请移步知识库管理</div>
           </el-upload>
         </el-form-item>
+        <el-form-item label="开启知识图谱" prop="isKnowledgeGraph">
+          <el-switch v-model="fileData.isKnowledgeGraph" :active-value="1" :inactive-value="0" />
+        </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
         <el-button type="primary" @click="closeForm">确 定</el-button>
       </div>
+    </el-dialog>
+
+    <!-- 知识图谱对话框 -->
+    <el-dialog :title="'知识图谱 - ' + graphTitle" :visible.sync="graphVisible" width="90%" append-to-body>
+      <knowledge-graph ref="knowledgeGraph" :projectId="currentProjectId"></knowledge-graph>
     </el-dialog>
   </div>
 </template>
@@ -216,9 +235,13 @@
 <script>
 import {listProject, getProject, delProject, addProject, updateProject, listAcknowledges, removeFile} from "@/api/chat/project";
 import { getToken } from "@/utils/auth";
+import KnowledgeGraph from '@/components/KnowledgeGraph';
 
 export default {
   name: "Post",
+  components: {
+    KnowledgeGraph
+  },
   dicts: ['sys_normal_disable'],
   data() {
     return {
@@ -227,7 +250,11 @@ export default {
         "ollama qwen2:7b"
       ],
       fileList: [],
-      fileData: {},
+      // 使用Vue.observable确保对象是响应式的
+      fileData: {
+        projectId: undefined,
+        isKnowledgeGraph: 0
+      },
       fileUploadUrl: process.env.VUE_APP_BASE_API + '/chat/knowledge/upload',
       fileUploadHeaders: {Authorization: 'Bearer ' + getToken()},
       // 遮罩层
@@ -249,6 +276,9 @@ export default {
       // 是否显示弹出层
       projectOpen: false,
       acknowledgeOpen: false,
+      graphVisible: false,
+      graphTitle: "",
+      currentProjectId: null,
       // 已选择模型
       selectedModel: undefined,
       // 查询参数
@@ -338,7 +368,8 @@ export default {
         baseUrl: '',
         apiKey: '',
         systemPrompt: '',
-        pdfAnalysis: 1  // 设置默认值为1(开启)
+        pdfAnalysis: 1,  // 设置默认值为1(开启)
+        isKnowledgeGraph: 0  // 设置默认值为0(关闭)
       };
       this.resetForm("form");
     },
@@ -381,32 +412,50 @@ export default {
       });
     },
     handleUpload(row) {
-      this.fileData.projectId = row.projectId || this.ids
-      listAcknowledges(this.fileData).then(response => {
-        this.form = response.rows;
-        this.acknowledgeOpen = true;
-      });
+      // 创建新的对象来触发响应式更新
+      this.fileData = {
+        projectId: row.projectId || this.ids,
+        isKnowledgeGraph: 0 // 默认关闭知识图谱
+      };
+      this.fileList = []; // 打开弹窗前清空文件列表
+      this.acknowledgeOpen = true;
     },
+    beforeUpload(file) {
+      // 在上传前确保isKnowledgeGraph有值
+      return true;
+    },
+
     handleSuccess(res, file){
       if (res.code === 200) {
         this.fileList.push({ id: res.data, name: file.name});
         this.$modal.msgSuccess("文件上传成功");
       } else {
-        this.$modal.msgSuccess("文件上传失败");
+        this.$modal.msgError("文件上传失败");
       }
     },
-    removeFile(file, fileList){
+    removeFile(file) {
       let removeFileData = {knowledgeId: file.id, projectId: this.fileData.projectId};
-      removeFile(removeFileData).then(response => {
+      return removeFile(removeFileData).then(response => {
         if (response.code === 200) {
-          this.fileList = fileList;
+          this.$modal.msgSuccess('文件删除成功');
           return true;
         }
+        this.$modal.msgError('文件删除失败');
         return false;
       });
     },
+
+    handleRemove(file, fileList) {
+      this.fileList = fileList;
+    },
     closeForm(){
-      this.fileList = [];
+      this.$refs.uploadForm.resetFields(); // 重置表单
+      this.fileList = []; // 清空文件列表
+      // 创建新的对象来重置状态
+      this.fileData = {
+        projectId: this.fileData.projectId,
+        isKnowledgeGraph: 0
+      };
       this.acknowledgeOpen = false;
     },
     // upload(){
@@ -450,7 +499,17 @@ export default {
         this.getList();
         this.$modal.msgSuccess("删除成功");
       }).catch(() => {});
-    }
+    },
+    /** 查看知识图谱按钮操作 */
+    handleKnowledgeGraph(row) {
+      this.graphTitle = row.projectName;
+      this.currentProjectId = row.projectId;
+      this.graphVisible = true;
+      // 等待对话框打开后再初始化图谱
+      this.$nextTick(() => {
+        this.$refs.knowledgeGraph.loadGraphData();
+      });
+    },
   }
 };
 </script>
@@ -483,5 +542,3 @@ export default {
   background-color: #fafafa;
 }
 </style>
-
-
